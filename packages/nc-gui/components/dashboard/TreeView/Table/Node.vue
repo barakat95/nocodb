@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { type BaseType, PlanFeatureTypes, PlanTitles, type TableType, ViewTypes } from 'nocodb-sdk'
+import { type BaseType, type TableType, ViewTypes } from 'nocodb-sdk'
 
 import type { SidebarTableNode } from '~/lib/types'
 
@@ -637,51 +637,17 @@ async function onRename() {
                       {{ $t('labels.editTableDescription') }}
                     </div>
                   </NcMenuItem>
-                  <PaymentUpgradeBadgeProvider
-                    v-if="
-                      isTableAndFieldPermissionsEnabled &&
-                      isEeUI &&
-                      isUIAllowed('tableDuplicate', {
-                        source,
-                      }) &&
-                      (source?.is_meta || source?.is_local)
-                    "
-                    :feature="PlanFeatureTypes.FEATURE_TABLE_AND_FIELD_PERMISSIONS"
+                  <NcMenuItem
+                    v-if="isTableAndFieldPermissionsEnabled"
+                    :data-testid="`sidebar-table-permissions-${table.title}`"
+                    class="nc-table-permissions"
+                    @click="onPermissions(table)"
                   >
-                    <template #default="{ click }">
-                      <NcMenuItem
-                        :data-testid="`sidebar-table-permissions-${table.title}`"
-                        class="nc-table-permissions"
-                        @click="
-                          click(PlanFeatureTypes.FEATURE_TABLE_AND_FIELD_PERMISSIONS, () => {
-                            onPermissions(table)
-                          })
-                        "
-                      >
-                        <div v-e="['c:table:permissions']" class="flex gap-2 items-center w-full">
-                          <GeneralIcon icon="ncLock" class="opacity-80" />
-                          <div class="flex-1">
-                            {{ $t('title.editTablePermissions') }}
-                          </div>
-
-                          <LazyPaymentUpgradeBadge
-                            :feature="PlanFeatureTypes.FEATURE_TABLE_AND_FIELD_PERMISSIONS"
-                            :title="$t('upgrade.upgradeToUseTableAndFieldPermissions')"
-                            :content="
-                              $t('upgrade.upgradeToUseTableAndFieldPermissionsSubtitle', {
-                                plan: PlanTitles.PLUS,
-                              })
-                            "
-                            :on-click-callback="
-                              () => {
-                                isOptionsOpen = false
-                              }
-                            "
-                          />
-                        </div>
-                      </NcMenuItem>
-                    </template>
-                  </PaymentUpgradeBadgeProvider>
+                    <div v-e="['c:table:permissions']" class="flex gap-2 items-center">
+                      <GeneralIcon icon="ncLock" class="opacity-80" />
+                      {{ $t('title.editTablePermissions') }}
+                    </div>
+                  </NcMenuItem>
                   <NcDivider />
 
                   <NcMenuItem @click="onDuplicate">
@@ -739,7 +705,7 @@ async function onRename() {
       :base-id="base.id"
     />
     <DlgTablePermissions
-      v-if="table.id && isEeUI"
+      v-if="table.id && isTableAndFieldPermissionsEnabled"
       v-model:visible="isTablePermissionsDialogVisible"
       :table-id="table.id"
       :title="table.title"

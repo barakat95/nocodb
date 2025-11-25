@@ -300,3 +300,8 @@ export enum FilterCacheScope {
   WIDGET = 'widget',
   PARENT = 'parent',
 }
+
+export enum BaseVersion {
+  V1 = 1,
+  V2 = 2,
+}

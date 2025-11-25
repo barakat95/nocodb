@@ -17,6 +17,15 @@ const props = withDefaults(
 
 const emits = defineEmits(['rename', 'closeModal', 'delete', 'descriptionUpdate'])
 
+const { isTableAndFieldPermissionsEnabled } = usePermissions()
+
+const isViewPermissionsDialogVisible = ref(false)
+
+const onViewPermissions = () => {
+  isViewPermissionsDialogVisible.value = true
+  emits('closeModal')
+}
+
 const { isUIAllowed, isDataReadOnly } = useRoles()
 
 const isPublicView = inject(IsPublicInj, ref(false))
@@ -282,6 +291,13 @@ defineOptions({
             <GeneralIcon icon="ncAlignLeft" class="opacity-80" />
 
             {{ $t('labels.editDescription') }}
+          </NcMenuItem>
+          <NcMenuItem
+            v-if="isTableAndFieldPermissionsEnabled"
+            @click="onViewPermissions"
+          >
+            <GeneralIcon icon="ncLock" class="opacity-80" />
+            {{ $t('title.editViewPermissions') }}
           </NcMenuItem>
         </template>
         <NcMenuItem @click="onDuplicate">
@@ -616,6 +632,13 @@ defineOptions({
       :source-id="currentSourceId"
     />
   </template>
+
+  <DlgViewPermissions
+    v-if="view?.id && isTableAndFieldPermissionsEnabled"
+    v-model:visible="isViewPermissionsDialogVisible"
+    :view-id="view.id"
+    :title="view.title"
+  />
 </template>
 
 <style lang="scss" scoped>

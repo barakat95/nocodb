@@ -35,6 +35,7 @@ import { AttachmentsSecureController } from '~/controllers/attachments-secure.co
 import { AttachmentsController } from '~/controllers/attachments.controller';
 import { BaseUsersController } from '~/controllers/base-users.controller';
 import { BasesController } from '~/controllers/bases.controller';
+import { PermissionsController } from '~/controllers/permissions.controller';
 import { CachesController } from '~/controllers/caches.controller';
 import { CalendarsController } from '~/controllers/calendars.controller';
 import { ColumnsController } from '~/controllers/columns.controller';
@@ -74,6 +75,7 @@ import { AttachmentsService } from '~/services/attachments.service';
 import { AuditsService } from '~/services/audits.service';
 import { BaseUsersService } from '~/services/base-users/base-users.service';
 import { BasesService } from '~/services/bases.service';
+import { PermissionsService } from '~/services/permissions.service';
 import { CachesService } from '~/services/caches.service';
 import { CalendarsService } from '~/services/calendars.service';
 import { ColumnsService } from '~/services/columns.service';
@@ -206,6 +208,7 @@ export const nocoModuleMetadata = {
           PluginsController,
           BaseUsersController,
           BasesController,
+          PermissionsController,
           PublicMetasController,
           ViewsController,
           ViewColumnsController,
@@ -291,6 +294,7 @@ export const nocoModuleMetadata = {
     BaseUsersService,
     BaseMembersV3Service,
     BasesService,
+    PermissionsService,
     PublicMetasService,
     ViewsService,
     ViewColumnsService,

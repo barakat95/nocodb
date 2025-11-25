@@ -3,12 +3,15 @@ import DOMPurify from 'isomorphic-dompurify';
 import {
   AppEvents,
   EventType,
+  extractRolesObj,
   isCreatedOrLastModifiedByCol,
   isCreatedOrLastModifiedTimeCol,
   isLinksOrLTAR,
   isOrderCol,
   isVirtualCol,
   ModelTypes,
+  PermissionEntity,
+  PermissionKey,
   ProjectRoles,
   RelationTypes,
   UITypes,
@@ -28,7 +31,7 @@ import type { LinkToAnotherRecordColumn, User, View } from '~/models';
 import type { NcContext, NcRequest } from '~/interface/config';
 import { repopulateCreateTableSystemColumns } from '~/helpers/tableHelpers';
 import { ColumnWebhookManagerBuilder } from '~/utils/column-webhook-manager';
-import { Base, Column, Model, ModelRoleVisibility } from '~/models';
+import { Base, Column, Model, ModelRoleVisibility, Permission } from '~/models';
 import { AppHooksService } from '~/services/app-hooks/app-hooks.service';
 import ProjectMgrv2 from '~/db/sql-mgr/v2/ProjectMgrv2';
 import { NcError } from '~/helpers/catchError';
@@ -560,6 +563,10 @@ export class TablesService {
       sourceId?: string;
       includeM2M?: boolean;
       roles: Record<string, boolean>;
+      user?: {
+        id: string;
+        base_roles?: Record<string, boolean>;
+      };
     },
   ) {
     const viewList = await this.xcVisibilityMetaGet(context, param.baseId);
@@ -584,9 +591,92 @@ export class TablesService {
       })
     ).filter((t) => tableViewMapping[t.id]);
 
+    // Check table access permissions if user is provided
+    let accessibleTables = tableList;
+    if (param.user) {
+      const tableAccessChecks = await Promise.all(
+        tableList.map(async (table) => {
+          const hasAccess = await this.checkTableAccessPermission(
+            context,
+            table.id,
+            param.baseId,
+            param.user!,
+          );
+          return { table, hasAccess };
+        }),
+      );
+
+      accessibleTables = tableAccessChecks
+        .filter(({ hasAccess }) => hasAccess)
+        .map(({ table }) => table);
+    }
+
     return param.includeM2M
-      ? tableList
-      : (tableList.filter((t) => !t.mm) as Model[]);
+      ? accessibleTables
+      : (accessibleTables.filter((t) => !t.mm) as Model[]);
+  }
+
+  /**
+   * Check if user has permission to access a table
+   */
+  private async checkTableAccessPermission(
+    context: NcContext,
+    tableId: string,
+    baseId: string,
+    user: {
+      id: string;
+      base_roles?: Record<string, boolean>;
+    },
+  ): Promise<boolean> {
+    // Get table permissions
+    const permissions = await Permission.list(context, baseId, {
+      entity: PermissionEntity.TABLE,
+      entityId: tableId,
+      permission: PermissionKey.TABLE_ACCESS,
+    });
+
+    // If no permissions set, allow by default
+    if (permissions.length === 0) {
+      return true;
+    }
+
+    const permission = permissions[0];
+    const baseRoles = extractRolesObj(user.base_roles || {});
+
+    // Check permission based on granted_type
+    switch (permission.granted_type) {
+      case 'nobody':
+        return false;
+
+      case 'role':
+        // Check if user has the required role or higher
+        if (permission.granted_role === 'viewer') {
+          return true; // All roles can access
+        } else if (permission.granted_role === 'editor') {
+          return !!(
+            baseRoles[ProjectRoles.EDITOR] ||
+            baseRoles[ProjectRoles.CREATOR] ||
+            baseRoles[ProjectRoles.OWNER]
+          );
+        } else if (permission.granted_role === 'creator') {
+          return !!(
+            baseRoles[ProjectRoles.CREATOR] || baseRoles[ProjectRoles.OWNER]
+          );
+        }
+        return true;
+
+      case 'user':
+        // Check if user is in the subjects list
+        if (permission.subjects && permission.subjects.length > 0) {
+          return permission.subjects.some(
+            (subject: any) => subject.type === 'user' && subject.id === user.id,
+          );
+        }
+        return false;
+
+      default:
+        return true;
+    }
   }
 
   async tableCreate(
