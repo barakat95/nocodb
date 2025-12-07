@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AppEvents, EventType, ProjectRoles, ViewTypes } from 'nocodb-sdk';
+import { AppEvents, EventType, extractRolesObj, PermissionEntity, PermissionKey, ProjectRoles, ViewTypes } from 'nocodb-sdk';
 import type {
   SharedViewReqType,
   UserType,
@@ -14,6 +14,7 @@ import {
   CustomUrl,
   Model,
   ModelRoleVisibility,
+  Permission,
   User,
   View,
 } from '~/models';
@@ -82,7 +83,7 @@ async function xcVisibilityMetaGet(
 
 @Injectable()
 export class ViewsService {
-  constructor(private appHooksService: AppHooksService) {}
+  constructor(private appHooksService: AppHooksService) { }
 
   async viewList(
     context: NcContext,
@@ -108,7 +109,7 @@ export class ViewsService {
 
     // todo: user roles
     //await View.list(param.tableId)
-    
+
     // Check permissions for all views
     const viewAccessChecks = await Promise.all(
       viewList.map(async (view: any) => {

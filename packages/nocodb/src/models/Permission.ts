@@ -116,7 +116,7 @@ export default class Permission {
       'granted_role',
       'enforce_for_form',
       'enforce_for_automation',
-    ]);
+    ]) as any;
 
     insertObj.id = id;
     insertObj.fk_workspace_id = context.workspace_id;

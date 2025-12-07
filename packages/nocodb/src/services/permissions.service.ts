@@ -120,11 +120,11 @@ export class PermissionsService {
     let grantedRole: PermissionRole | undefined;
 
     if (param.permissionValue === PermissionOptionValue.NOBODY) {
-      grantedType = 'nobody';
+      grantedType = PermissionGrantedType.NOBODY;
     } else if (param.permissionValue === PermissionOptionValue.SPECIFIC_USERS) {
-      grantedType = 'user';
+      grantedType = PermissionGrantedType.USER;
     } else {
-      grantedType = 'role';
+      grantedType = PermissionGrantedType.ROLE;
       // Map permission value to role
       if (param.permissionValue === PermissionOptionValue.CREATORS_AND_UP) {
         grantedRole = PermissionRole.CREATOR;
