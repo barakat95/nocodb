@@ -628,6 +628,13 @@ export class TablesService {
       base_roles?: Record<string, boolean>;
     },
   ): Promise<boolean> {
+    const baseRoles = extractRolesObj(user.base_roles || {});
+    
+    // Owners and Creators always have access
+    if (baseRoles[ProjectRoles.OWNER] || baseRoles[ProjectRoles.CREATOR]) {
+      return true;
+    }
+    
     // Get table permissions
     const permissions = await Permission.list(context, baseId, {
       entity: PermissionEntity.TABLE,
@@ -641,7 +648,6 @@ export class TablesService {
     }
 
     const permission = permissions[0];
-    const baseRoles = extractRolesObj(user.base_roles || {});
 
     // Check permission based on granted_type
     switch (permission.granted_type) {
