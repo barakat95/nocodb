@@ -22,12 +22,14 @@ const isLoading = ref(false)
 const permissions = ref<Record<string, PermissionOptionValue>>({
   [PermissionKey.TABLE_ACCESS]: PermissionOptionValue.VIEWERS_AND_UP,
   [PermissionKey.TABLE_RECORD_ADD]: PermissionOptionValue.EDITORS_AND_UP,
+  [PermissionKey.TABLE_RECORD_EDIT]: PermissionOptionValue.EDITORS_AND_UP,
   [PermissionKey.TABLE_RECORD_DELETE]: PermissionOptionValue.EDITORS_AND_UP,
 })
 
 const selectedUsers = ref<Record<string, string[]>>({
   [PermissionKey.TABLE_ACCESS]: [],
   [PermissionKey.TABLE_RECORD_ADD]: [],
+  [PermissionKey.TABLE_RECORD_EDIT]: [],
   [PermissionKey.TABLE_RECORD_DELETE]: [],
 })
 
@@ -103,19 +105,29 @@ const savePermissions = async () => {
   isLoading.value = true
   try {
     // Save each permission using the API
-    const permissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.TABLE_RECORD_DELETE]
+    const permissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.TABLE_RECORD_EDIT, PermissionKey.TABLE_RECORD_DELETE]
 
     for (const permissionKey of permissionKeys) {
       const permissionValue = permissions.value[permissionKey]
-      const subjects =
-        permissionValue === PermissionOptionValue.SPECIFIC_USERS &&
-        Array.isArray(selectedUsers.value[permissionKey]) &&
-        selectedUsers.value[permissionKey].length > 0
-          ? selectedUsers.value[permissionKey].map((userId) => ({
-              type: 'user' as const,
-              id: userId,
-            }))
-          : undefined
+      
+      // Handle both string and array from NcSelect component
+      let subjects: Array<{ type: 'user'; id: string }> | undefined
+      
+      if (permissionValue === PermissionOptionValue.SPECIFIC_USERS) {
+        const selected = selectedUsers.value[permissionKey]
+        
+        // NcSelect with multiple can return string or array
+        if (typeof selected === 'string' && selected.length > 0) {
+          // Single selection returned as string
+          subjects = [{ type: 'user' as const, id: selected }]
+        } else if (Array.isArray(selected) && selected.length > 0) {
+          // Multiple selections returned as array
+          subjects = selected.map((userId) => ({
+            type: 'user' as const,
+            id: userId,
+          }))
+        }
+      }
 
       // Use the set endpoint
       await $api.instance.post(`/api/v2/meta/bases/${base.value.id}/permissions/set`, {
@@ -158,7 +170,7 @@ watch(
   { deep: true },
 )
 
-const tablePermissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.TABLE_RECORD_DELETE]
+const tablePermissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.TABLE_RECORD_EDIT, PermissionKey.TABLE_RECORD_DELETE]
 
 const getPermissionMeta = (key: PermissionKey) => {
   return PermissionMeta[key] || { label: key, description: '' }
@@ -230,6 +242,7 @@ const showUserSelector = (permissionKey: PermissionKey) => {
             <NcSelect
               v-model:value="selectedUsers[permissionKey]"
               class="w-full"
+              mode="multiple"
               :options="
                 baseUsers.map((user) => ({
                   label: user.display_name || user.email,
@@ -237,7 +250,6 @@ const showUserSelector = (permissionKey: PermissionKey) => {
                 }))
               "
               :placeholder="$t('general.select')"
-              multiple
             />
           </div>
         </div>

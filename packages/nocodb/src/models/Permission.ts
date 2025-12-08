@@ -141,12 +141,9 @@ export default class Permission {
         base_id: permission.base_id,
       }));
 
-      await ncMeta.bulkMetaInsert(
-        context.workspace_id,
-        context.base_id,
-        MetaTable.PERMISSION_SUBJECTS,
-        subjectInserts,
-      );
+      // Use direct knex insert instead of bulkMetaInsert because nc_permission_subjects
+      // doesn't have an 'id' column (uses composite primary key)
+      await ncMeta.knex(MetaTable.PERMISSION_SUBJECTS).insert(subjectInserts);
     }
 
     return this.get(context, id, ncMeta);
@@ -231,12 +228,9 @@ export default class Permission {
           base_id: existing.base_id,
         }));
 
-        await ncMeta.bulkMetaInsert(
-          context.workspace_id,
-          context.base_id,
-          MetaTable.PERMISSION_SUBJECTS,
-          subjectInserts,
-        );
+        // Use direct knex insert instead of bulkMetaInsert because nc_permission_subjects
+        // doesn't have an 'id' column (uses composite primary key)
+        await ncMeta.knex(MetaTable.PERMISSION_SUBJECTS).insert(subjectInserts);
       }
     }
 

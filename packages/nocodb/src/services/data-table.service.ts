@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import {
   extractRolesObj,
+  hasMinimumRoleAccess,
   isLinksOrLTAR,
   ncIsNumber,
+  PermissionEntity,
   PermissionKey,
   PermissionOptionValue,
   ProjectRoles,
@@ -13,7 +15,7 @@ import { validatePayload } from 'src/helpers';
 import type { NcApiVersion } from 'nocodb-sdk';
 import type { LinkToAnotherRecordColumn } from '~/models';
 import type { NcContext, NcRequest } from '~/interface/config';
-import { Column, Model, Source, View } from '~/models';
+import { Column, Model, Permission, Source, View } from '~/models';
 import { nocoExecute, processConcurrently } from '~/utils';
 import { DatasService } from '~/services/datas.service';
 import { NcError } from '~/helpers/catchError';
@@ -193,51 +195,43 @@ export class DataTableService {
       return; // If no user, skip permission check (might be public base)
     }
 
-    // Check if permissions are stored in table meta
-    const metaObj = typeof model.meta === 'string' ? JSON.parse(model.meta) : model.meta;
-    if (!metaObj?.permissions) {
-      return; // If no permissions set, allow by default
+    // Get table permissions
+    const permissions = await Permission.list(context, model.base_id, {
+      entity: PermissionEntity.TABLE,
+      entityId: model.id,
+      permission: permissionKey,
+    });
+
+    // If no permissions set, allow by default
+    if (permissions.length === 0) {
+      return;
     }
 
-    const permissionValue = metaObj.permissions[permissionKey];
-    if (!permissionValue) {
-      return; // If permission not set, allow by default
-    }
+    const permission = permissions[0];
 
-    // Get user's base role
-    const baseRoles = extractRolesObj(user.base_roles || {});
-
-    // Check user role against permission requirement
     let isAllowed = false;
 
-    switch (permissionValue) {
-      case PermissionOptionValue.CREATORS_AND_UP:
-        // Only creators and owners can perform action
-        isAllowed = !!(baseRoles[ProjectRoles.CREATOR] || baseRoles[ProjectRoles.OWNER]);
-        break;
-
-      case PermissionOptionValue.EDITORS_AND_UP:
-        // Editors, creators, and owners can perform action
-        isAllowed = !!(
-          baseRoles[ProjectRoles.EDITOR] ||
-          baseRoles[ProjectRoles.CREATOR] ||
-          baseRoles[ProjectRoles.OWNER]
-        );
-        break;
-
-      case PermissionOptionValue.VIEWERS_AND_UP:
-        // All roles can perform action
-        isAllowed = true;
-        break;
-
-      case PermissionOptionValue.NOBODY:
-        // No one can perform action
+    // Check permission based on granted_type
+    switch (permission.granted_type) {
+      case 'nobody':
         isAllowed = false;
         break;
 
-      case PermissionOptionValue.SPECIFIC_USERS:
-        // TODO: Implement specific users check
-        isAllowed = true;
+      case 'role':
+        // Check if user has the required role or higher
+        isAllowed = hasMinimumRoleAccess(
+          user,
+          permission.granted_role as unknown as ProjectRoles,
+        );
+        break;
+
+      case 'user':
+        // Check if user is in the subjects list
+        if (permission.subjects && permission.subjects.length > 0) {
+          isAllowed = permission.subjects.some(
+            (subject) => subject.type === 'user' && subject.id === user.id,
+          );
+        }
         break;
 
       default:
@@ -246,7 +240,7 @@ export class DataTableService {
 
     if (!isAllowed) {
       NcError.forbidden(
-        `You don't have permission to perform this action. Required: ${permissionValue}`,
+        `You don't have permission to perform this action.`,
       );
     }
   }
@@ -297,6 +291,14 @@ export class DataTableService {
     },
   ) {
     const { model, view } = await this.getModelAndView(context, param);
+
+    // Check table permissions for record update
+    await this.checkTablePermission(
+      context,
+      model,
+      PermissionKey.TABLE_RECORD_EDIT,
+      param.cookie,
+    );
 
     await this.checkForDuplicateRow(context, { rows: param.body, model });
 
