@@ -631,7 +631,7 @@ export class TablesService {
     const baseRoles = extractRolesObj(user.base_roles || {});
     
     // Owners and Creators always have access
-    if (baseRoles[ProjectRoles.OWNER] || baseRoles[ProjectRoles.CREATOR]) {
+    if (baseRoles[ProjectRoles.OWNER]) {
       return true;
     }
     
