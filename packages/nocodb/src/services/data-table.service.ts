@@ -318,7 +318,7 @@ export class DataTableService {
     await this.checkTablePermission(
       context,
       model,
-      PermissionKey.TABLE_RECORD_EDIT,
+      PermissionKey.RECORD_FIELD_EDIT,
       param.cookie,
     );
 

@@ -24,7 +24,7 @@ import { NcContext, NcRequest } from '~/interface/config';
 @Controller()
 @UseGuards(DataApiLimiterGuard, GlobalGuard)
 export class DataAliasController {
-  constructor(private readonly datasService: DatasService) {}
+  constructor(private readonly datasService: DatasService) { }
 
   // todo: Handle the error case where view doesnt belong to model
   @Get([

@@ -22,14 +22,14 @@ const isLoading = ref(false)
 const permissions = ref<Record<string, PermissionOptionValue>>({
   [PermissionKey.TABLE_ACCESS]: PermissionOptionValue.VIEWERS_AND_UP,
   [PermissionKey.TABLE_RECORD_ADD]: PermissionOptionValue.EDITORS_AND_UP,
-  [PermissionKey.TABLE_RECORD_EDIT]: PermissionOptionValue.EDITORS_AND_UP,
+  [PermissionKey.RECORD_FIELD_EDIT]: PermissionOptionValue.EDITORS_AND_UP,
   [PermissionKey.TABLE_RECORD_DELETE]: PermissionOptionValue.EDITORS_AND_UP,
 })
 
 const selectedUsers = ref<Record<string, string[]>>({
   [PermissionKey.TABLE_ACCESS]: [],
   [PermissionKey.TABLE_RECORD_ADD]: [],
-  [PermissionKey.TABLE_RECORD_EDIT]: [],
+  [PermissionKey.RECORD_FIELD_EDIT]: [],
   [PermissionKey.TABLE_RECORD_DELETE]: [],
 })
 
@@ -105,7 +105,7 @@ const savePermissions = async () => {
   isLoading.value = true
   try {
     // Save each permission using the API
-    const permissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.TABLE_RECORD_EDIT, PermissionKey.TABLE_RECORD_DELETE]
+    const permissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.RECORD_FIELD_EDIT, PermissionKey.TABLE_RECORD_DELETE]
 
     for (const permissionKey of permissionKeys) {
       const permissionValue = permissions.value[permissionKey]
@@ -170,7 +170,7 @@ watch(
   { deep: true },
 )
 
-const tablePermissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.TABLE_RECORD_EDIT, PermissionKey.TABLE_RECORD_DELETE]
+const tablePermissionKeys = [PermissionKey.TABLE_ACCESS, PermissionKey.TABLE_RECORD_ADD, PermissionKey.RECORD_FIELD_EDIT, PermissionKey.TABLE_RECORD_DELETE]
 
 const getPermissionMeta = (key: PermissionKey) => {
   return PermissionMeta[key] || { label: key, description: '' }

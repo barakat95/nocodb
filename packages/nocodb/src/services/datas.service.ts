@@ -223,7 +223,7 @@ export class DatasService {
         const permissions = await Permission.list(context, model.base_id, {
           entity: PermissionEntity.TABLE,
           entityId: model.id,
-          permission: PermissionKey.TABLE_RECORD_EDIT,
+          permission: PermissionKey.RECORD_FIELD_EDIT,
         });
 
         if (permissions.length > 0) {
