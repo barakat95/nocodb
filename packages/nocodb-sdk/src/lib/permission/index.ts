@@ -2,6 +2,7 @@ import { ProjectRoles, WorkspaceUserRoles } from '../enums';
 
 export enum PermissionKey {
   TABLE_RECORD_ADD = 'TABLE_RECORD_ADD',
+  TABLE_RECORD_EDIT = 'TABLE_RECORD_EDIT',
   TABLE_RECORD_DELETE = 'TABLE_RECORD_DELETE',
   RECORD_FIELD_EDIT = 'RECORD_FIELD_EDIT',
   VIEW_ACCESS = 'VIEW_ACCESS',
@@ -107,6 +108,13 @@ export const PermissionMeta = {
     description: 'can create records',
     userSelectorDescription:
       'Only members selected here will be able to create records.',
+  },
+  [PermissionKey.TABLE_RECORD_EDIT]: {
+    minimumRole: PermissionRole.EDITOR,
+    label: 'Who can edit records',
+    description: 'can edit records',
+    userSelectorDescription:
+      'Only members selected here will be able to edit records.',
   },
   [PermissionKey.TABLE_RECORD_DELETE]: {
     minimumRole: PermissionRole.EDITOR,

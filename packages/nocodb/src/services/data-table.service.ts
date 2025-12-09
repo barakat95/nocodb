@@ -26,7 +26,7 @@ import { dataWrapper } from '~/helpers/dbHelpers';
 
 @Injectable()
 export class DataTableService {
-  constructor(protected datasService: DatasService) {}
+  constructor(protected datasService: DatasService) { }
 
   async dataList(
     context: NcContext,
@@ -117,11 +117,11 @@ export class DataTableService {
 
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       listArgs.aggregation = JSON.parse(listArgs.aggregation);
-    } catch (e) {}
+    } catch (e) { }
 
     const data = await baseModel.aggregate(listArgs, view);
 
@@ -145,7 +145,7 @@ export class DataTableService {
     },
   ) {
     const { model, view } = await this.getModelAndView(context, param);
-    
+
     // Check table permissions for record creation
     await this.checkTablePermission(
       context,
@@ -189,10 +189,25 @@ export class DataTableService {
     permissionKey: PermissionKey,
     cookie: any,
   ): Promise<void> {
+    console.log(`\n=== Checking ${permissionKey} permission ===`);
+
     // Get user from cookie/request
     const user = (cookie as NcRequest)?.user;
     if (!user) {
+      console.log('No user, skipping');
       return; // If no user, skip permission check (might be public base)
+    }
+
+    console.log('User:', user.id, 'Roles:', user.base_roles);
+
+    // Extract user's base roles
+    const baseRoles = extractRolesObj(user.base_roles || {});
+    console.log('Extracted roles:', baseRoles);
+
+    // Owners always have access (bypass all permission checks)
+    if (baseRoles[ProjectRoles.OWNER]) {
+      console.log('Owner bypass');
+      return;
     }
 
     // Get table permissions
@@ -204,8 +219,11 @@ export class DataTableService {
 
     // If no permissions set, allow by default
     if (permissions.length === 0) {
+      console.log('No permissions set, allowing');
       return;
     }
+
+    console.log('Permission:', permissions[0].granted_type, permissions[0].granted_role);
 
     const permission = permissions[0];
 
@@ -223,6 +241,7 @@ export class DataTableService {
           user,
           permission.granted_role as unknown as ProjectRoles,
         );
+        console.log(`Role check: need ${permission.granted_role}, result: ${isAllowed}`);
         break;
 
       case 'user':
@@ -238,7 +257,10 @@ export class DataTableService {
         isAllowed = true;
     }
 
+    console.log('Final decision:', isAllowed);
+
     if (!isAllowed) {
+      console.log('DENYING ACCESS');
       NcError.forbidden(
         `You don't have permission to perform this action.`,
       );
@@ -391,7 +413,7 @@ export class DataTableService {
     const countArgs: any = { ...param.query };
     try {
       countArgs.filterArr = JSON.parse(countArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     const count: number = await baseModel.count(countArgs, false, true);
 
@@ -541,10 +563,10 @@ export class DataTableService {
     const listArgs: any = dependencyFields;
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
     try {
       listArgs.sortArr = JSON.parse(listArgs.sortArrJson);
-    } catch (e) {}
+    } catch (e) { }
     if (
       ncIsNumber(Number(param.query.limit)) &&
       Number(param.query.limit) > 0
@@ -642,12 +664,12 @@ export class DataTableService {
       columnId: string;
       query: any;
       refRowIds:
-        | string
-        | string[]
-        | number
-        | number[]
-        | Record<string, any>
-        | Record<string, any>[];
+      | string
+      | string[]
+      | number
+      | number[]
+      | Record<string, any>
+      | Record<string, any>[];
       rowId: string;
     },
   ) {
@@ -757,7 +779,7 @@ export class DataTableService {
     if (
       !operationMap.deleteAll &&
       operationMap.copy.fk_related_model_id !==
-        operationMap.paste.fk_related_model_id
+      operationMap.paste.fk_related_model_id
     ) {
       throw new Error(
         'The operation is not supported on different fk_related_model_id',
@@ -818,11 +840,11 @@ export class DataTableService {
 
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       listArgs.sortArr = JSON.parse(listArgs.sortArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     if (operationMap.deleteAll) {
       let deleteCellNestedList = await baseModel.mmList(
@@ -891,19 +913,19 @@ export class DataTableService {
 
       await Promise.all([
         filteredRowsToLink.length &&
-          baseModel.addLinks({
-            colId: column.id,
-            childIds: filteredRowsToLink,
-            rowId: operationMap.paste.rowId,
-            cookie: param.cookie,
-          }),
+        baseModel.addLinks({
+          colId: column.id,
+          childIds: filteredRowsToLink,
+          rowId: operationMap.paste.rowId,
+          cookie: param.cookie,
+        }),
         filteredRowsToUnlink.length &&
-          baseModel.removeLinks({
-            colId: column.id,
-            childIds: filteredRowsToUnlink,
-            rowId: operationMap.paste.rowId,
-            cookie: param.cookie,
-          }),
+        baseModel.removeLinks({
+          colId: column.id,
+          childIds: filteredRowsToUnlink,
+          rowId: operationMap.paste.rowId,
+          cookie: param.cookie,
+        }),
       ]);
 
       return { link: filteredRowsToLink, unlink: filteredRowsToUnlink };
@@ -967,7 +989,7 @@ export class DataTableService {
 
     try {
       bulkFilterList = JSON.parse(bulkFilterList);
-    } catch (e) {}
+    } catch (e) { }
 
     if (!bulkFilterList?.length) {
       NcError.badRequest('Invalid bulkFilterList');
@@ -1017,11 +1039,11 @@ export class DataTableService {
     const listArgs: any = { ...param.query };
     try {
       bulkFilterList = JSON.parse(bulkFilterList);
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJSON);
-    } catch (e) {}
+    } catch (e) { }
 
     if (!bulkFilterList?.length) {
       NcError.badRequest('Invalid bulkFilterList');

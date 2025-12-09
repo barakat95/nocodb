@@ -1,5 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { isLinksOrLTAR, NcSDKErrorV2 } from 'nocodb-sdk';
+import {
+  extractRolesObj,
+  hasMinimumRoleAccess,
+  isLinksOrLTAR,
+  NcSDKErrorV2,
+  PermissionEntity,
+  PermissionKey,
+  ProjectRoles,
+} from 'nocodb-sdk';
 import { NcApiVersion } from 'nocodb-sdk';
 import type { BaseModelSqlv2 } from '~/db/BaseModelSqlv2';
 import type { PathParams } from '~/helpers/dataHelpers';
@@ -10,7 +18,7 @@ import { NcBaseError, NcError } from '~/helpers/catchError';
 import { getViewAndModelByAliasOrId } from '~/helpers/dataHelpers';
 import getAst from '~/helpers/getAst';
 import { PagedResponseImpl } from '~/helpers/PagedResponse';
-import { Base, Column, Model, Source, View } from '~/models';
+import { Base, Column, Model, Permission, Source, View } from '~/models';
 import { nocoExecute } from '~/utils';
 import NcConnectionMgrv2 from '~/utils/common/NcConnectionMgrv2';
 import { QUERY_STRING_FIELD_ID_ON_RESULT } from '~/constants';
@@ -19,7 +27,7 @@ import { QUERY_STRING_FIELD_ID_ON_RESULT } from '~/constants';
 export class DatasService {
   protected logger = new Logger(DatasService.name);
 
-  constructor() {}
+  constructor() { }
 
   async dataList(
     context: NcContext,
@@ -127,7 +135,7 @@ export class DatasService {
     const countArgs: any = { ...param.query, throwErrorIfInvalidParams: true };
     try {
       countArgs.filterArr = JSON.parse(countArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     const count: number = await baseModel.count(countArgs);
 
@@ -144,6 +152,40 @@ export class DatasService {
     },
   ) {
     const { model, view } = await getViewAndModelByAliasOrId(context, param);
+
+    // Check table permissions for record creation
+    const user = (param.cookie as any)?.user;
+    if (user) {
+      const baseRoles = extractRolesObj(user.base_roles || {});
+      if (!baseRoles[ProjectRoles.OWNER]) {
+        const permissions = await Permission.list(context, model.base_id, {
+          entity: PermissionEntity.TABLE,
+          entityId: model.id,
+          permission: PermissionKey.TABLE_RECORD_ADD,
+        });
+
+        if (permissions.length > 0) {
+          const permission = permissions[0];
+          let isAllowed = false;
+
+          if (permission.granted_type === 'role') {
+            isAllowed = hasMinimumRoleAccess(user, permission.granted_role as unknown as ProjectRoles);
+          } else if (permission.granted_type === 'user') {
+            if (permission.subjects && permission.subjects.length > 0) {
+              isAllowed = permission.subjects.some(
+                (subject) => subject.type === 'user' && subject.id === user.id,
+              );
+            }
+          } else if (permission.granted_type === 'nobody') {
+            isAllowed = false;
+          }
+
+          if (!isAllowed) {
+            NcError.forbidden(`You don't have permission to create records in this table.`);
+          }
+        }
+      }
+    }
 
     const source = await Source.get(context, model.source_id);
 
@@ -172,6 +214,41 @@ export class DatasService {
     },
   ) {
     const { model, view } = await getViewAndModelByAliasOrId(context, param);
+
+    // Check table permissions for record update
+    const user = (param.cookie as any)?.user;
+    if (user) {
+      const baseRoles = extractRolesObj(user.base_roles || {});
+      if (!baseRoles[ProjectRoles.OWNER]) {
+        const permissions = await Permission.list(context, model.base_id, {
+          entity: PermissionEntity.TABLE,
+          entityId: model.id,
+          permission: PermissionKey.TABLE_RECORD_EDIT,
+        });
+
+        if (permissions.length > 0) {
+          const permission = permissions[0];
+          let isAllowed = false;
+
+          if (permission.granted_type === 'role') {
+            isAllowed = hasMinimumRoleAccess(user, permission.granted_role as unknown as ProjectRoles);
+          } else if (permission.granted_type === 'user') {
+            if (permission.subjects && permission.subjects.length > 0) {
+              isAllowed = permission.subjects.some(
+                (subject) => subject.type === 'user' && subject.id === user.id,
+              );
+            }
+          } else if (permission.granted_type === 'nobody') {
+            isAllowed = false;
+          }
+
+          if (!isAllowed) {
+            NcError.forbidden(`You don't have permission to edit records in this table.`);
+          }
+        }
+      }
+    }
+
     const source = await Source.get(context, model.source_id);
 
     const baseModel = await Model.getBaseModelSQL(context, {
@@ -195,6 +272,41 @@ export class DatasService {
     param: PathParams & { rowId: string; cookie: any },
   ) {
     const { model, view } = await getViewAndModelByAliasOrId(context, param);
+
+    // Check table permissions for record deletion
+    const user = (param.cookie as any)?.user;
+    if (user) {
+      const baseRoles = extractRolesObj(user.base_roles || {});
+      if (!baseRoles[ProjectRoles.OWNER]) {
+        const permissions = await Permission.list(context, model.base_id, {
+          entity: PermissionEntity.TABLE,
+          entityId: model.id,
+          permission: PermissionKey.TABLE_RECORD_DELETE,
+        });
+
+        if (permissions.length > 0) {
+          const permission = permissions[0];
+          let isAllowed = false;
+
+          if (permission.granted_type === 'role') {
+            isAllowed = hasMinimumRoleAccess(user, permission.granted_role as unknown as ProjectRoles);
+          } else if (permission.granted_type === 'user') {
+            if (permission.subjects && permission.subjects.length > 0) {
+              isAllowed = permission.subjects.some(
+                (subject) => subject.type === 'user' && subject.id === user.id,
+              );
+            }
+          } else if (permission.granted_type === 'nobody') {
+            isAllowed = false;
+          }
+
+          if (!isAllowed) {
+            NcError.forbidden(`You don't have permission to delete records in this table.`);
+          }
+        }
+      }
+    }
+
     const source = await Source.get(context, model.source_id);
     const baseModel = await Model.getBaseModelSQL(context, {
       id: model.id,
@@ -270,10 +382,10 @@ export class DatasService {
     const listArgs: any = dependencyFields;
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
     try {
       listArgs.sortArr = JSON.parse(listArgs.sortArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     listArgs.customConditions = param.customConditions;
 
@@ -335,10 +447,10 @@ export class DatasService {
     const args: any = { ...query };
     try {
       args.filterArr = JSON.parse(args.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
     try {
       args.sortArr = JSON.parse(args.sortArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     const { ast, dependencyFields } = await getAst(context, {
       model,
@@ -369,10 +481,10 @@ export class DatasService {
 
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
     try {
       listArgs.sortArr = JSON.parse(listArgs.sortArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     const data = await baseModel.groupBy(listArgs);
     const count = await baseModel.groupByCount(listArgs);
@@ -402,10 +514,10 @@ export class DatasService {
 
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
     try {
       listArgs.sortArr = JSON.parse(listArgs.sortArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     return await baseModel.groupByCount(listArgs);
   }
@@ -503,13 +615,13 @@ export class DatasService {
     const listArgs: any = { ...dependencyFields };
     try {
       listArgs.filterArr = JSON.parse(listArgs.filterArrJson);
-    } catch (e) {}
+    } catch (e) { }
     try {
       listArgs.sortArr = JSON.parse(listArgs.sortArrJson);
-    } catch (e) {}
+    } catch (e) { }
     try {
       listArgs.options = JSON.parse(listArgs.optionsArrJson);
-    } catch (e) {}
+    } catch (e) { }
 
     let data = [];
 
