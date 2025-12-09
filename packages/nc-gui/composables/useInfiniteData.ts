@@ -1662,7 +1662,6 @@ export function useInfiniteData(args: {
       toUpdate.row[property] = toUpdate.oldRow[property]
       const errorMessage = await extractSdkResponseErrorMsg(e)
       message.error(`${t('msg.error.rowUpdateFailed')}: ${errorMessage}`)
-      throw e
     } finally {
       toUpdate.rowMeta.saving = false
     }
@@ -1733,6 +1732,8 @@ export function useInfiniteData(args: {
       }
       data = await updateRowProperty(row, property, args, false, path)
     }
+
+    if (!data) return
 
     const isValidationFailed = !validateRowFilters(
       [...allFilters.value, ...computedWhereFilter.value],
