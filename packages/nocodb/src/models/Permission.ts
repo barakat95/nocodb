@@ -8,7 +8,7 @@ import type { NcContext } from '~/interface/config';
 import Noco from '~/Noco';
 import { extractProps } from '~/helpers/extractProps';
 import { MetaTable } from '~/utils/globals';
-import { v4 as uuidv4 } from 'uuid';
+import { nanoid } from 'nanoid';
 
 export default class Permission {
   id: string;
@@ -105,7 +105,7 @@ export default class Permission {
     },
     ncMeta = Noco.ncMeta,
   ): Promise<Permission> {
-    const id = uuidv4();
+    const id = nanoid(20);
 
     const insertObj = extractProps(permission, [
       'base_id',
