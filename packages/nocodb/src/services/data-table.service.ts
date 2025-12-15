@@ -189,24 +189,17 @@ export class DataTableService {
     permissionKey: PermissionKey,
     cookie: any,
   ): Promise<void> {
-    console.log(`\n=== Checking ${permissionKey} permission ===`);
-
     // Get user from cookie/request
     const user = (cookie as NcRequest)?.user;
     if (!user) {
-      console.log('No user, skipping');
       return; // If no user, skip permission check (might be public base)
     }
 
-    console.log('User:', user.id, 'Roles:', user.base_roles);
-
     // Extract user's base roles
     const baseRoles = extractRolesObj(user.base_roles || {});
-    console.log('Extracted roles:', baseRoles);
 
     // Owners always have access (bypass all permission checks)
     if (baseRoles[ProjectRoles.OWNER]) {
-      console.log('Owner bypass');
       return;
     }
 
@@ -219,11 +212,8 @@ export class DataTableService {
 
     // If no permissions set, allow by default
     if (permissions.length === 0) {
-      console.log('No permissions set, allowing');
       return;
     }
-
-    console.log('Permission:', permissions[0].granted_type, permissions[0].granted_role);
 
     const permission = permissions[0];
 
@@ -241,7 +231,6 @@ export class DataTableService {
           user,
           permission.granted_role as unknown as ProjectRoles,
         );
-        console.log(`Role check: need ${permission.granted_role}, result: ${isAllowed}`);
         break;
 
       case 'user':
@@ -257,10 +246,7 @@ export class DataTableService {
         isAllowed = true;
     }
 
-    console.log('Final decision:', isAllowed);
-
     if (!isAllowed) {
-      console.log('DENYING ACCESS');
       NcError.forbidden(
         `You don't have permission to perform this action.`,
       );

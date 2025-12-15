@@ -80,6 +80,7 @@ import * as nc_090_add_is_new_user_to_users from '~/meta/migrations/v2/nc_090_ad
 import * as nc_091_unify_model from '~/meta/migrations/v2/nc_091_unify_model';
 import * as nc_092_composite_pk from '~/meta/migrations/v2/nc_092_composite_pk';
 import * as nc_093_table_users from '~/meta/migrations/v2/nc_093_table_users';
+import * as nc_094_permission_indexes from '~/meta/migrations/v2/nc_094_permission_indexes';
 
 // Create a custom migration source class
 export default class XcMigrationSourcev2 {
@@ -171,6 +172,7 @@ export default class XcMigrationSourcev2 {
       'nc_091_unify_model',
       'nc_092_composite_pk',
       'nc_093_table_users',
+      'nc_094_permission_indexes',
     ]);
   }
 
@@ -344,6 +346,8 @@ export default class XcMigrationSourcev2 {
         return nc_092_composite_pk;
       case 'nc_093_table_users':
         return nc_093_table_users;
+      case 'nc_094_permission_indexes':
+        return nc_094_permission_indexes;
     }
   }
 }

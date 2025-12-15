@@ -110,32 +110,84 @@ export class ViewsService {
     // todo: user roles
     //await View.list(param.tableId)
 
-    // Check permissions for all views
-    const viewAccessChecks = await Promise.all(
-      viewList.map(async (view: any) => {
-        const hasAccess = await this.checkViewPermission(
-          context,
-          view.id,
-          model.base_id,
-          param.user,
-        );
-        return { view, hasAccess };
-      }),
-    );
+    const baseRoles = extractRolesObj(param.user.base_roles || {});
 
-    // Filter views based on permissions and role-based visibility
-    const filteredViewList = viewAccessChecks
-      .filter(({ view, hasAccess }) => {
-        if (!hasAccess) {
-          return false;
-        }
-
-        // Check role-based visibility
+    // Owners always have access to all views
+    if (baseRoles[ProjectRoles.OWNER]) {
+      return viewList.filter((view: any) => {
         return Object.values(ProjectRoles).some(
           (role) => param?.user?.['base_roles']?.[role] && !view.disabled[role],
         );
-      })
-      .map(({ view }) => view);
+      });
+    }
+
+    // Batch load all view permissions in ONE query
+    const permissionsMap = await Permission.listByEntities(
+      context,
+      model.base_id,
+      viewList.map((view: any) => ({
+        entity: PermissionEntity.VIEW,
+        entityId: view.id,
+        permission: PermissionKey.VIEW_ACCESS,
+      })),
+    );
+
+    // Filter views based on permissions and role-based visibility (in-memory, no database queries)
+    const filteredViewList = viewList.filter((view: any) => {
+      // Check role-based visibility first
+      const hasRoleVisibility = Object.values(ProjectRoles).some(
+        (role) => param?.user?.['base_roles']?.[role] && !view.disabled[role],
+      );
+
+      if (!hasRoleVisibility) {
+        return false;
+      }
+
+      // Check permission-based access
+      const permissions = permissionsMap.get(view.id) || [];
+
+      // If no permissions set, allow by default
+      if (permissions.length === 0) {
+        return true;
+      }
+
+      const permission = permissions[0];
+
+      // Check permission based on granted_type
+      switch (permission.granted_type) {
+        case 'nobody':
+          return false;
+
+        case 'role':
+          // Check if user has the required role or higher
+          if (permission.granted_role === 'viewer') {
+            return true; // All roles can access
+          } else if (permission.granted_role === 'editor') {
+            return !!(
+              baseRoles[ProjectRoles.EDITOR] ||
+              baseRoles[ProjectRoles.CREATOR] ||
+              baseRoles[ProjectRoles.OWNER]
+            );
+          } else if (permission.granted_role === 'creator') {
+            return !!(
+              baseRoles[ProjectRoles.CREATOR] || baseRoles[ProjectRoles.OWNER]
+            );
+          }
+          return true;
+
+        case 'user':
+          // Check if user is in the subjects list
+          if (permission.subjects && permission.subjects.length > 0) {
+            return permission.subjects.some(
+              (subject) => subject.type === 'user' && subject.id === param.user.id,
+            );
+          }
+          return false;
+
+        default:
+          return true;
+      }
+    });
 
     return filteredViewList;
   }

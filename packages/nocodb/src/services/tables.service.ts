@@ -594,21 +594,72 @@ export class TablesService {
     // Check table access permissions if user is provided
     let accessibleTables = tableList;
     if (param.user) {
-      const tableAccessChecks = await Promise.all(
-        tableList.map(async (table) => {
-          const hasAccess = await this.checkTableAccessPermission(
-            context,
-            table.id,
-            param.baseId,
-            param.user!,
-          );
-          return { table, hasAccess };
-        }),
+      const baseRoles = extractRolesObj(param.user.base_roles || {});
+      
+      // Owners always have access to all tables
+      if (baseRoles[ProjectRoles.OWNER]) {
+        return param.includeM2M
+          ? accessibleTables
+          : (accessibleTables.filter((t) => !t.mm) as Model[]);
+      }
+
+      // Batch load all table permissions in ONE query
+      const permissionsMap = await Permission.listByEntities(
+        context,
+        param.baseId,
+        tableList.map((table) => ({
+          entity: PermissionEntity.TABLE,
+          entityId: table.id,
+          permission: PermissionKey.TABLE_ACCESS,
+        })),
       );
 
-      accessibleTables = tableAccessChecks
-        .filter(({ hasAccess }) => hasAccess)
-        .map(({ table }) => table);
+      // Filter tables based on permissions (in-memory, no database queries)
+      accessibleTables = tableList.filter((table) => {
+        const permissions = permissionsMap.get(table.id) || [];
+        
+        // If no permissions set, allow by default
+        if (permissions.length === 0) {
+          return true;
+        }
+
+        const permission = permissions[0];
+
+        // Check permission based on granted_type
+        switch (permission.granted_type) {
+          case 'nobody':
+            return false;
+
+          case 'role':
+            // Check if user has the required role or higher
+            if (permission.granted_role === 'viewer') {
+              return true; // All roles can access
+            } else if (permission.granted_role === 'editor') {
+              return !!(
+                baseRoles[ProjectRoles.EDITOR] ||
+                baseRoles[ProjectRoles.CREATOR] ||
+                baseRoles[ProjectRoles.OWNER]
+              );
+            } else if (permission.granted_role === 'creator') {
+              return !!(
+                baseRoles[ProjectRoles.CREATOR] || baseRoles[ProjectRoles.OWNER]
+              );
+            }
+            return true;
+
+          case 'user':
+            // Check if user is in the subjects list
+            if (permission.subjects && permission.subjects.length > 0) {
+              return permission.subjects.some(
+                (subject: any) => subject.type === 'user' && subject.id === param.user!.id,
+              );
+            }
+            return false;
+
+          default:
+            return true;
+        }
+      });
     }
 
     return param.includeM2M

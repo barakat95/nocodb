@@ -42,53 +42,178 @@ export default class Permission {
     },
     ncMeta = Noco.ncMeta,
   ): Promise<Permission[]> {
+    // Use LEFT JOIN to fetch permissions and subjects in a single query
     const query = ncMeta
       .knex(MetaTable.PERMISSIONS)
-      .where('base_id', baseId);
+      .leftJoin(
+        MetaTable.PERMISSION_SUBJECTS,
+        `${MetaTable.PERMISSIONS}.id`,
+        `${MetaTable.PERMISSION_SUBJECTS}.fk_permission_id`,
+      )
+      .where(`${MetaTable.PERMISSIONS}.base_id`, baseId)
+      .select(
+        `${MetaTable.PERMISSIONS}.*`,
+        ncMeta.knex.raw(
+          `${MetaTable.PERMISSION_SUBJECTS}.subject_type as subject_type`,
+        ),
+        ncMeta.knex.raw(
+          `${MetaTable.PERMISSION_SUBJECTS}.subject_id as subject_id`,
+        ),
+      );
 
     if (context.workspace_id) {
-      query.where('fk_workspace_id', context.workspace_id);
+      query.where(`${MetaTable.PERMISSIONS}.fk_workspace_id`, context.workspace_id);
     }
 
     if (options?.entity) {
-      query.where('entity', options.entity);
+      query.where(`${MetaTable.PERMISSIONS}.entity`, options.entity);
     }
 
     if (options?.entityId) {
-      query.where('entity_id', options.entityId);
+      query.where(`${MetaTable.PERMISSIONS}.entity_id`, options.entityId);
     }
 
     if (options?.permission) {
-      query.where('permission', options.permission);
+      query.where(`${MetaTable.PERMISSIONS}.permission`, options.permission);
     }
 
-    const permissions = await query;
-
-    // Load subjects for each permission
-    const permissionIds = permissions.map((p) => p.id);
-    const subjects = permissionIds.length
-      ? await ncMeta
-          .knex(MetaTable.PERMISSION_SUBJECTS)
-          .whereIn('fk_permission_id', permissionIds)
-      : [];
+    const rows = await query;
 
     // Group subjects by permission id
-    const subjectsByPermission = subjects.reduce((acc, subj) => {
-      if (!acc[subj.fk_permission_id]) {
-        acc[subj.fk_permission_id] = [];
-      }
-      acc[subj.fk_permission_id].push({
-        type: subj.subject_type,
-        id: subj.subject_id,
-      });
-      return acc;
-    }, {} as Record<string, Array<{ type: string; id: string }>>);
+    const permissionMap = new Map<string, Permission>();
 
-    return permissions.map((p) => ({
-      ...p,
-      subjects: subjectsByPermission[p.id] || [],
-    })) as Permission[];
+    for (const row of rows) {
+      if (!permissionMap.has(row.id)) {
+        permissionMap.set(row.id, {
+          id: row.id,
+          fk_workspace_id: row.fk_workspace_id,
+          base_id: row.base_id,
+          entity: row.entity,
+          entity_id: row.entity_id,
+          permission: row.permission,
+          created_by: row.created_by,
+          enforce_for_form: row.enforce_for_form,
+          enforce_for_automation: row.enforce_for_automation,
+          granted_type: row.granted_type,
+          granted_role: row.granted_role,
+          subjects: [],
+        });
+      }
+
+      // Add subject if it exists
+      if (row.subject_type && row.subject_id) {
+        permissionMap.get(row.id)!.subjects!.push({
+          type: row.subject_type,
+          id: row.subject_id,
+        });
+      }
+    }
+
+    return Array.from(permissionMap.values());
   }
+
+  /**
+   * Batch load permissions for multiple entities
+   * This is optimized to load all permissions in a single query instead of N separate queries
+   */
+  public static async listByEntities(
+    context: NcContext,
+    baseId: string,
+    entities: Array<{
+      entity: PermissionEntity;
+      entityId: string;
+      permission?: PermissionKey;
+    }>,
+    ncMeta = Noco.ncMeta,
+  ): Promise<Map<string, Permission[]>> {
+    if (entities.length === 0) {
+      return new Map();
+    }
+
+    // Build query to fetch all permissions at once
+    const query = ncMeta
+      .knex(MetaTable.PERMISSIONS)
+      .leftJoin(
+        MetaTable.PERMISSION_SUBJECTS,
+        `${MetaTable.PERMISSIONS}.id`,
+        `${MetaTable.PERMISSION_SUBJECTS}.fk_permission_id`,
+      )
+      .where(`${MetaTable.PERMISSIONS}.base_id`, baseId)
+      .select(
+        `${MetaTable.PERMISSIONS}.*`,
+        ncMeta.knex.raw(
+          `${MetaTable.PERMISSION_SUBJECTS}.subject_type as subject_type`,
+        ),
+        ncMeta.knex.raw(
+          `${MetaTable.PERMISSION_SUBJECTS}.subject_id as subject_id`,
+        ),
+      );
+
+    if (context.workspace_id) {
+      query.where(`${MetaTable.PERMISSIONS}.fk_workspace_id`, context.workspace_id);
+    }
+
+    // Add OR conditions for each entity
+    query.where((qb) => {
+      for (const { entity, entityId, permission } of entities) {
+        qb.orWhere((subQb) => {
+          subQb
+            .where(`${MetaTable.PERMISSIONS}.entity`, entity)
+            .where(`${MetaTable.PERMISSIONS}.entity_id`, entityId);
+
+          if (permission) {
+            subQb.where(`${MetaTable.PERMISSIONS}.permission`, permission);
+          }
+        });
+      }
+    });
+
+    const rows = await query;
+
+    // Group by permission id first
+    const permissionMap = new Map<string, Permission>();
+
+    for (const row of rows) {
+      if (!permissionMap.has(row.id)) {
+        permissionMap.set(row.id, {
+          id: row.id,
+          fk_workspace_id: row.fk_workspace_id,
+          base_id: row.base_id,
+          entity: row.entity,
+          entity_id: row.entity_id,
+          permission: row.permission,
+          created_by: row.created_by,
+          enforce_for_form: row.enforce_for_form,
+          enforce_for_automation: row.enforce_for_automation,
+          granted_type: row.granted_type,
+          granted_role: row.granted_role,
+          subjects: [],
+        });
+      }
+
+      // Add subject if it exists
+      if (row.subject_type && row.subject_id) {
+        permissionMap.get(row.id)!.subjects!.push({
+          type: row.subject_type,
+          id: row.subject_id,
+        });
+      }
+    }
+
+    // Group permissions by entity_id for easy lookup
+    const result = new Map<string, Permission[]>();
+
+    for (const permission of permissionMap.values()) {
+      const key = permission.entity_id;
+      if (!result.has(key)) {
+        result.set(key, []);
+      }
+      result.get(key)!.push(permission);
+    }
+
+    return result;
+  }
+
 
   public static async create(
     context: NcContext,
